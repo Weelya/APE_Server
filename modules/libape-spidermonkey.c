@@ -26,13 +26,19 @@
 #ifdef _USE_MYSQL
 #include <mysac.h>
 #endif
+
+#ifdef GPSEE
+#include <gpsee.h>
+#else
 #include <jsapi.h>
+#endif
 #include <stdio.h>
 #include <glob.h>
 #include "plugins.h"
 #include "global_plugins.h"
 
 #define MODULE_NAME "spidermonkey"
+#define MODULE_ID "1"
 
 /* Return the global SpiderMonkey Runtime instance e.g. ASMR->runtime */
 #define ASMR ((ape_sm_runtime *)get_property(g_ape->properties, "sm_runtime")->val)
@@ -178,6 +184,7 @@ static JSClass apesocket_class = {
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
+#ifndef GPSEE
 /* Standard javascript object */
 static JSClass global_class = {
 	"global", JSCLASS_GLOBAL_FLAGS,
@@ -186,6 +193,7 @@ static JSClass global_class = {
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 
 };
+#endif
 
 /* The main Ape Object (global) */
 static JSClass ape_class = {
@@ -1312,7 +1320,6 @@ static void reportError(JSContext *cx, const char *message, JSErrorReport *repor
 
 static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *root)
 {
-	JS_EnterLocalRootScope(cx);
 	while (head != NULL) {
 		if (head->jchild.child == NULL && head->key.val != NULL) {
 			jsval jval;
@@ -1320,6 +1327,7 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 			if (root == NULL) {
 				root = JS_NewObject(cx, NULL, NULL, NULL);
 			}
+			JS_AddRoot(cx, &root);
 			
 			if (head->jval.vu.str.value != NULL) {
 				jval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, head->jval.vu.str.value, head->jval.vu.str.length));
@@ -1334,7 +1342,8 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 
 			if (root == NULL) {
 				root = JS_NewArrayObject(cx, 0, NULL);
-			}			
+			}
+			JS_AddRoot(cx, &root);			
 			
 			if (head->jval.vu.str.value != NULL) {	
 				jval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, head->jval.vu.str.value, head->jval.vu.str.length));
@@ -1342,7 +1351,7 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 				jsdouble dp = (head->jval.vu.integer_value ? head->jval.vu.integer_value : head->jval.vu.float_value);
 				JS_NewNumberValue(cx, dp, &jval);
 			}
-
+			/* TODO : jsdouble can be garbaged in the next call */
 			if (JS_GetArrayLength(cx, root, &rval)) {
 				JS_SetElement(cx, root, rval, &jval);
 			}			
@@ -1362,12 +1371,14 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 			
 			ape_json_to_jsobj(cx, head->jchild.child, cobj);
 
+			JS_AddRoot(cx, &cobj);
 
 			if (head->key.val != NULL) {
 				jsval jval;
 
 				if (root == NULL) {
 					root = JS_NewObject(cx, NULL, NULL, NULL);
+					JS_AddRoot(cx, &root);
 				}
 				
 				jval = OBJECT_TO_JSVAL(cobj);
@@ -1378,21 +1389,25 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 
 				if (root == NULL) {
 					root = JS_NewArrayObject(cx, 0, NULL);
+					JS_AddRoot(cx, &root);
 				}
 				
 				jval = OBJECT_TO_JSVAL(cobj);
-				
 				if (JS_GetArrayLength(cx, root, &rval)) {
 					JS_SetElement(cx, root, rval, &jval);
 				}								
 			}
 
+			JS_RemoveRoot(cx, &cobj);
 			
 		}
 		head = head->next;
 	}
 
-	JS_LeaveLocalRootScope(cx);
+	if (root != NULL) {
+		JS_RemoveRoot(cx, &root);
+	}
+
 	return root;
 }
 
@@ -2091,6 +2106,7 @@ APE_JS_NATIVE(ape_sm_set_timeout)
 	
 	for (i = 0; i < argc-2; i++) {
 		params->argv[i] = argv[i+2];
+		JS_AddRoot(cx, &params->argv[i]);
 	}
 	
 	timer = add_timeout(ms, ape_sm_timer_wrapper, params, g_ape);
@@ -2135,6 +2151,7 @@ APE_JS_NATIVE(ape_sm_set_interval)
 	
 	for (i = 0; i < argc-2; i++) {
 		params->argv[i] = argv[i+2];
+		JS_AddRoot(cx, &params->argv[i]);
 	}
 	
 	timer = add_periodical(ms, 0, ape_sm_timer_wrapper, params, g_ape);
@@ -2885,15 +2902,23 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 {
 	JSRuntime *rt;
 	JSContext *gcx;
-
+#ifdef GPSEE
+        gpsee_interpreter_t *jsi = gpsee_createInterpreter(NULL, NULL);
+#endif
 	ape_sm_runtime *asr;
+#ifndef GPSEE
 	jsval rval;
+#endif
 	int i;
 	char rpath[512];
 	
 	glob_t globbuf;
 
-	rt = JS_NewRuntime(128L * 1024L * 1024L);
+#ifdef GPSEE
+        rt = jsi->rt;
+#else
+        rt = JS_NewRuntime(128L * 1024L * 1024L);
+#endif
 	
 	if (rt == NULL) {
 		printf("[ERR] Not enougth memory\n");
@@ -2902,13 +2927,17 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	asr = xmalloc(sizeof(*asr));
 	asr->runtime = rt;
 	asr->scripts = NULL;
-	
+
 	/* Setup a global context to store shared object */
-	gcx = JS_NewContext(rt, 8192);
+#ifdef GPSEE
+	gcx = jsi->cx; 
+#else
+        gcx = JS_NewContext(rt, 8192);
 	JS_SetOptions(gcx, JSOPTION_VAROBJFIX | JSOPTION_JIT);
 	JS_SetVersion(gcx, JSVERSION_LATEST);
-	JS_SetErrorReporter(gcx, reportError);
 	JS_InitStandardClasses(gcx, JS_NewObject(gcx, &global_class, NULL, NULL));
+#endif
+	JS_SetErrorReporter(gcx, reportError);
 	
 	add_property(&g_ape->properties, "sm_context", gcx, EXTEND_POINTER, EXTEND_ISPRIVATE);
 	add_property(&g_ape->properties, "sm_runtime", asr, EXTEND_POINTER, EXTEND_ISPRIVATE);
@@ -2923,30 +2952,35 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 		ape_sm_compiled *asc = xmalloc(sizeof(*asc));
 	
 		asc->filename = (void *)xstrdup(globbuf.gl_pathv[i]);
-
-		asc->cx = JS_NewContext(rt, 8192);
-		//JS_SetGCZeal(asc->cx, 2);
+                asc->cx = JS_NewContext(rt, 8192);
 		
 		if (asc->cx == NULL) {
 			free(asc->filename);
 			free(asc);
 			continue;
 		}
+
+		//JS_SetGCZeal(asc->cx, 2);
 		
 		//JS_SetContextThread(asc->cx);
-		//JS_BeginRequest(asc->cx);
-			
+#ifdef GPSEE
+		JS_BeginRequest(asc->cx);
+#else
 			JS_SetOptions(asc->cx, JSOPTION_VAROBJFIX | JSOPTION_JIT);
 			JS_SetVersion(asc->cx, JSVERSION_LATEST);
+#endif
 			JS_SetErrorReporter(asc->cx, reportError);
 
-			asc->global = JS_NewObject(asc->cx, &global_class, NULL, NULL);
-			
+#ifdef GPSEE
+                        asc->global = JS_NewObject(asc->cx, gpsee_getGlobalClass(), NULL, NULL);
+                        gpsee_initGlobalObject(asc->cx, asc->global, NULL, NULL);
+#else
+                        asc->global = JS_NewObject(asc->cx, &global_class, NULL, NULL);
 			JS_InitStandardClasses(asc->cx, asc->global);
-			
+#endif		
 			/* define the Ape Object */
 			ape_sm_define_ape(asc, gcx, g_ape);
-
+#ifndef GPSEE
 			asc->bytecode = JS_CompileFile(asc->cx, asc->global, asc->filename);
 			
 			if (asc->bytecode != NULL) {
@@ -2954,18 +2988,24 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 
 				/* Adding to the root (prevent the script to be GC collected) */
 				JS_AddNamedRoot(asc->cx, &asc->scriptObj, asc->filename);
-
+#endif
 				/* put the Ape table on the script structure */
 				asc->g_ape = g_ape;
 
 				asc->callbacks.head = NULL;
 				asc->callbacks.foot = NULL;
-				
+
 				/* Run the script */
+#ifdef GPSEE
+				gpsee_runProgramModule(asc->cx, asc->filename, NULL);
+#else
 				JS_ExecuteScript(asc->cx, asc->global, asc->bytecode, &rval);
-				
 			}
-		//JS_EndRequest(asc->cx);
+#endif
+
+#ifdef GPSEE
+		JS_EndRequest(asc->cx);
+#endif
 		//JS_ClearContextThread(asc->cx);
 
 		if (asc->bytecode == NULL) {
@@ -2980,7 +3020,6 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	APE_JS_EVENT("init", 0, NULL);
 	
 }
-
 static USERS *ape_cb_add_user(USERS *allocated, acetables *g_ape)
 {
 	jsval params[1];	

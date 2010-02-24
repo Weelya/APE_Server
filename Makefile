@@ -1,26 +1,44 @@
 EXEC=bin/aped
+LIBRARY=lib/libaped.so
 
 prefix		= /usr/local
 bindir		= $(prefix)/bin
+libdir		= $(prefix)/lib
 
+LIBAPED_SRC	= src/sock.c src/hash.c src/handle_http.c src/cmd.c src/users.c src/channel.c src/config.c src/json.c \
+		  src/json_parser.c src/plugins.c src/http.c src/extend.c src/utils.c src/ticks.c src/base64.c src/pipe.c \
+		  src/raw.c src/events.c src/event_kqueue.c src/event_epoll.c src/transports.c src/servers.c src/dns.c \
+		  src/sha1.c src/log.c src/parser.c
+APED_SRC	= src/entry.c
 
-SRC=src/entry.c src/sock.c src/hash.c src/handle_http.c src/cmd.c src/users.c src/channel.c src/config.c src/json.c src/json_parser.c src/plugins.c src/http.c src/extend.c src/utils.c src/ticks.c src/base64.c src/pipe.c src/raw.c src/events.c src/event_kqueue.c src/event_epoll.c src/transports.c src/servers.c src/dns.c src/sha1.c src/log.c src/parser.c
+CFLAGS 		+= -Wall -O2 -minline-all-stringops $(EXTRA_CFLAGS)
+CPPFLAGS 	+= -I ./deps/udns-0.0.9/ -D_GNU_SOURCE
+LDFLAGS		+= -ldl -lm -lpthread -Wl,-rpath=$(libdir) -L$(dir $(LIBRARY)) $(EXTRA_LDFLAGS) -Wl,-rpath=$(abspath $(dir $(LIBRARY)))
+CC		= gcc
+LD		= $(CC) -shared
+RM		= rm -f
 
-CFLAGS = -Wall -O2 -minline-all-stringops -rdynamic -I ./deps/udns-0.0.9/
-LFLAGS=-ldl -lm -lpthread
-CC=gcc -D_GNU_SOURCE
-RM=rm -f
-
-all: aped
+all: $(LIBRARY) $(EXEC)
 	
-aped: $(SRC)
-	$(CC) $(CFLAGS) $(SRC) -o $(EXEC) $(LFLAGS) ./deps/udns-0.0.9/libudns.a -I ./deps/udns-0.0.9/
+$(EXEC): LOADLIBES += -laped
+$(EXEC): $(APED_SRC:.c=.o)
+	@[ -d $(dir $@) ] || mkdir -p $(dir $@) || echo "*** error: could not mkdir $(dir $@)"
+	$(CC) $(LDFLAGS) $^ $(LOADLIBES) $(LDLIBS) -o $@
+
+$(LIBRARY): $(LIBAPED_SRC:.c=.o) ./deps/udns-0.0.9/libudns.a
+	@[ -d $(dir $@) ] || mkdir -p $(dir $@) || echo "*** error: could not mkdir $(dir $@)"
+	$(LD) $(LDFLAGS) $^ -o $@
+
+$(LIBAPED_SRC:.c=.o):	EXTRA_CFLAGS += -fPIC
+
 install: 
 	install -d $(bindir)
 	install -m 755 $(EXEC) $(bindir)
+	install	-m 755 $(LIBRARY) $(libdir)
 
 uninstall:
-	$(RM) $(bindir)/aped
+	$(RM) $(bindir)/$(notdir $(EXEC))
+	$(RM) $(libdir)/$(notdir $(LIBRARY))
 
 clean:
-	$(RM) $(EXEC)
+	$(RM) $(EXEC) $(LIBRARY)
