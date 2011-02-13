@@ -134,7 +134,6 @@ int main(int argc, char **argv)
 
 	signal(SIGINT, &signal_handler);
 	signal(SIGTERM, &signal_handler);
-	signal(SIGKILL, &signal_handler);
 	
 	if (VTICKS_RATE < 1) {
 		printf("[ERR] TICKS_RATE cant be less than 1\n");
@@ -151,13 +150,15 @@ int main(int argc, char **argv)
 	close(random);
 
 	g_ape = xmalloc(sizeof(*g_ape));
-	g_ape->basemem = 256000;
+	g_ape->basemem = 1; // set 1 for testing if growup works
 	g_ape->srv = srv;
 	g_ape->confs_path = confs_path;
 	g_ape->is_daemon = 0;
 	
 	ape_log_init(g_ape);
 	
+	fdev.handler = EVENT_UNKNOWN;
+
 	#ifdef USE_EPOLL_HANDLER
 	fdev.handler = EVENT_EPOLL;
 	#endif
@@ -174,7 +175,10 @@ int main(int argc, char **argv)
 	g_ape->timers.timers = NULL;
 	g_ape->timers.ntimers = 0;
 	g_ape->events = &fdev;
-	events_init(g_ape, &g_ape->basemem);
+	if (events_init(g_ape, &g_ape->basemem) == -1) {
+		printf("Fatal error: APE compiled without an event handler... exiting\n");
+		return 0;
+	};
 	
 	serverfd = servers_init(g_ape);
 	
@@ -197,39 +201,43 @@ int main(int argc, char **argv)
 				"Cannot set the max filedescriptos limit (setrlimit) %s", strerror(errno));
 		}
 		
-		/* Get the user information (uid section) */
-		if ((pwd = getpwnam(CONFIG_VAL(uid, user, srv))) == NULL) {
-			ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
-				"Can\'t find username %s", CONFIG_VAL(uid, user, srv));
-			return -1;
-		}
-		if (pwd->pw_uid == 0) {
-			ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
-				"%s uid can\'t be 0", CONFIG_VAL(uid, user, srv));
-			return -1;			
-		}
-		
-		/* Get the group information (uid section) */
-		if ((grp = getgrnam(CONFIG_VAL(uid, group, srv))) == NULL) {
-			printf("[ERR] Can\'t find group %s\n", CONFIG_VAL(uid, group, srv));
-			ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
-				"Can\'t find group %s", CONFIG_VAL(uid, group, srv));
-			return -1;
-		}
-		
-		if (grp->gr_gid == 0) {
-			ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
+		/* Set uid when uid section exists */
+		if (ape_config_get_section(srv, "uid")) {
+
+			/* Get the user information (uid section) */
+			if ((pwd = getpwnam(CONFIG_VAL(uid, user, srv))) == NULL) {
+				ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
+					"Can\'t find username %s", CONFIG_VAL(uid, user, srv));
+				return -1;
+			}
+			if (pwd->pw_uid == 0) {
+				ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
+					"%s uid can\'t be 0", CONFIG_VAL(uid, user, srv));
+				return -1;			
+			}
+			
+			/* Get the group information (uid section) */
+			if ((grp = getgrnam(CONFIG_VAL(uid, group, srv))) == NULL) {
+				printf("[ERR] Can\'t find group %s\n", CONFIG_VAL(uid, group, srv));
+				ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
+					"Can\'t find group %s", CONFIG_VAL(uid, group, srv));
+				return -1;
+			}
+			
+			if (grp->gr_gid == 0) {
+				ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
 				"%s gid can\'t be 0", CONFIG_VAL(uid, group, srv));
 			return -1;
-		}
+			}
 		
-		setgid(grp->gr_gid);
-		setgroups(0, NULL);
+			setgid(grp->gr_gid);
+			setgroups(0, NULL);
 
-		initgroups(CONFIG_VAL(uid, user, srv), grp->gr_gid);
+			initgroups(CONFIG_VAL(uid, user, srv), grp->gr_gid);
 		
-		setuid(pwd->pw_uid);
-		
+			setuid(pwd->pw_uid);
+		}
+
 	} else {
 		printf("[WARN] You have to run \'aped\' as root to increase r_limit\n");
 		ape_log(APE_WARN, __FILE__, __LINE__, g_ape, 
@@ -299,14 +307,35 @@ int main(int argc, char **argv)
 		unlink(pidfile);
 	}
 	
+	free(confs_path);
+
+	timers_free(g_ape);
+
+	events_free(g_ape);
+
+	transport_free(g_ape);
+
 	hashtbl_free(g_ape->hLogin);
 	hashtbl_free(g_ape->hSessid);
 	hashtbl_free(g_ape->hLusers);
+	hashtbl_free(g_ape->hPubid);
 	
 	hashtbl_free(g_ape->hCallback);
 	
-	free(g_ape->plugins);
-	//free(srv);
+	free(g_ape->bufout);
+
+	ape_config_free(srv);
+
+	int i;
+	for (i = 0; i < g_ape->basemem; i++) {
+		if (g_ape->co[i] != NULL) {
+			free(g_ape->co[i]);
+		}
+	}
+	free(g_ape->co);
+
+	free_all_plugins(g_ape);
+
 	free(g_ape);
 	
 	return 0;
