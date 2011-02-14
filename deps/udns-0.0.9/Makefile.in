@@ -36,6 +36,12 @@ OBJS   = $(SRCS:.c=.o) $(GEN:.c=.o)
 LIB    = lib$(NAME).a
 LIBFL  = -L. -l$(NAME)
 
+SYSNAME := $(shell uname -s)
+ifeq ($(SYSNAME), SunOS)
+LOADLIBES += -lnsl -lsocket
+CPPFLAGS += -DHAVE_INET_PTON_NTOP
+endif
+
 SOVER  = 0
 SOBJS  = $(OBJS:.o=.lo)
 SOLIB  = lib$(NAME)_s.so
@@ -52,7 +58,7 @@ NAMEPFX = $(NAME)-$(VERS)
 
 CC = @CC@
 CFLAGS = @CFLAGS@
-CDEFS = @CDEFS@
+CDEFS = @CDEFS@ $(CPPFLAGS)
 PICFLAGS = -fPIC
 AWK = awk
 
@@ -183,14 +189,15 @@ dnsget.o dnsget.lo: dnsget.c config.h udns.h getopt.c
 rblcheck.o rblcheck.lo: rblcheck.c udns.h getopt.c
 ex-rdns.o ex-rdns.lo: ex-rdns.c udns.h
 dnsget: dnsget.o $(LIB)
-	$(CC) $(CFLAGS) -o $@ dnsget.o $(LIBFL)
+	$(CC) $(CFLAGS) -o $@ dnsget.o $(LIBFL) $(LOADLIBES)
 dnsget_s: dnsget.o $(SOLIB)
-	$(CC) $(CFLAGS) -o $@ dnsget.o $(SOLIBFL)
+	$(CC) $(CFLAGS) -o $@ dnsget.o $(SOLIBFL) $(LOADLIBES)
 rblcheck: rblcheck.o $(LIB)
-	$(CC) $(CFLAGS) -o $@ rblcheck.o $(LIBFL)
+	$(CC) $(CFLAGS) -o $@ rblcheck.o $(LIBFL) $(LOADLIBES)
 rblcheck_s: rblcheck.o $(SOLIB)
-	$(CC) $(CFLAGS) -o $@ rblcheck.o $(SOLIBFL)
+	$(CC) $(CFLAGS) -o $@ rblcheck.o $(SOLIBFL) $(LOADLIBES)
 ex-rdns: ex-rdns.o $(LIB)
-	$(CC) $(CFLAGS) -o $@ ex-rdns.o $(LIBFL)
+	$(CC) $(CFLAGS) -o $@ ex-rdns.o $(LIBFL) $(LOADLIBES)
 ex-rdns_s: ex-rdns.o $(SOLIB)
-	$(CC) $(CFLAGS) -o $@ ex-rdns.o $(SOLIBFL)
+	$(CC) $(CFLAGS) -o $@ ex-rdns.o $(SOLIBFL) $(LOADLIBES)
+
