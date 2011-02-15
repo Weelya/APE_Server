@@ -25,6 +25,7 @@
 
 #include <stdlib.h>
 #include <math.h>
+#include "configure.h"
 
 void *xmalloc(size_t size);
 void *xrealloc(void *ptr, size_t size);
@@ -53,4 +54,13 @@ char *get_path(const char *full_path);
   #define MIN(a,b) (((a) < (b)) ? (a) : (b))
 #endif
 
+#include <stdarg.h>
+#if !defined(HAVE_VASPRINTF)
+int vasprintf(char **ret, const char *format, va_list ap);
 #endif
+
+#if !defined(HAVE_ASPRINTF)
+int asprintf(char **ret, const char *format, ...);
+#endif
+
+#endif /* _UTILS_H */

@@ -261,4 +261,30 @@ int urldecode(char *string)
 	return 1;
 }
 
+#if !defined(HAVE_VASPRINTF)
+int vasprintf(char **ret, const char *format, va_list ap)
+{
+  size_t len = vsnprintf(NULL, 0, format, ap);
+  
+  *ret = malloc(len + 1);
+  if (!ret)
+    return -1;
 
+  vsprintf(*ret, format, ap);
+  return len;
+}
+#endif
+
+#if !defined(HAVE_ASPRINTF)
+int asprintf(char **ret, const char *format, ...) 
+{
+  va_list ap;
+  int	  i;
+  
+  va_start(ap, format);
+  i = vasprintf(ret, format, ap);
+  va_end(ap);
+
+  return i;
+}
+#endif
