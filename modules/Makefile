@@ -1,14 +1,13 @@
 MODULES = lib/libape-spidermonkey.so
 
-include ./plateform.mk
+include ../platform.mk
 CC	?= gcc
 CFLAGS	+= $(EXTRA_CFLAGS) -Wall -O2 -fPIC
 LDFLAGS	+= $(EXTRA_LDFLAGS) 
 RM	?= rm -f
 
 ifeq ($(HAS_GPSEE), yes)
-GPSEE_PREFIX 	?= /usr/local/gpsee
-GPSEE_CONFIG 	?= $(GPSEE_PREFIX)/bin/gpsee-config
+GPSEE_CONFIG	?= gpsee-config
 CPPFLAGS	+= $(shell $(GPSEE_CONFIG) --cppflags)
 LDFLAGS		+= $(shell $(GPSEE_CONFIG) --ldflags)
 else

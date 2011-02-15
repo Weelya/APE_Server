@@ -1,21 +1,39 @@
-#!/bin/bash
+#! /bin/sh
+
+[ ! "${MYSQL_PATH}" ] && MYSQL_PATH="/usr/local/mysql"
 
 OS_TARGET=`uname -s`
 
 case "$OS_TARGET" in
         linux* | Linux*)
-        HOST_OS=Linux
+	HOST_OS=Linux
 		echo "#define USE_EPOLL_HANDLER" > ./src/configure.h
-		echo "LINUX_BUILD = 1" > ./modules/plateform.mk;;
+		echo "LINUX_BUILD = 1" > ./platform.mk
+		echo "#define HAVE_VASPRINTF" >> ./src/configure.h
+		echo "#define HAVE_ASPRINTF" >> ./src/configure.h
+        ;;
         Darwin*)
         HOST_OS=Darwin
 		echo "#define USE_KQUEUE_HANDLER" > ./src/configure.h
-		echo "DARWIN_BUILD = 1" > ./modules/plateform.mk;;
+		echo "DARWIN_BUILD = 1" > ./platform.mk
+		echo "#define HAVE_VASPRINTF" >> ./src/configure.h
+		echo "#define HAVE_ASPRINTF" >> ./src/configure.h
+        ;;
+        SunOS)
+	HOST_OS=Solaris
+	        echo "#define USE_SELECT_HANDLER" > ./src/configure.h
+		echo "SOLARIS_BUILD = 1" > ./platform.mk
+		echo "LDFLAGS += -lnsl -lsocket" >> platform.mk
+        ;;
         *)
-        HOST_IS=Linux;;
+	        echo "This platform is not supported." >/dev/stderr
+		exit 1
+        ;;
 esac
 
-if [ -e "/usr/include/mysql/mysql.h" ]
+echo "HAS_GPSEE=1" >> ./platform.mk
+
+if [ -f "${MYSQL_PATH}/mysql.h" ]
 then
     echo "HAS_MYSQL = yes" > ./modules/mysql.mk
 	echo "#define _USE_MYSQL 1" >> ./src/configure.h

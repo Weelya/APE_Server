@@ -60,7 +60,9 @@ void ape_log_init(acetables *g_ape)
 			{LOG_UUCP,     "uucp"},
 			{LOG_CRON,     "cron"},
 			/*{LOG_AUTHPRIV, "authpriv"}, private facility */
+#ifdef LOG_FTP
 			{LOG_FTP,      "ftp"}
+#endif
 		};
 		size_t syslog_max_facilities = sizeof(syslog_facilities) / sizeof(struct _syslog_facilities);
 
