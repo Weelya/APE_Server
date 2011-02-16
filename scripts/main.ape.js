@@ -12,3 +12,7 @@ Ape.addEvent("init", function() {
 	//include("framework/http_auth.js");
 });
 
+
+Ape.registerCmd("foo", false, function(params, cmd) { return [800, "bar"]  });
+
+print("hello, world");

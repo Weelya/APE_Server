@@ -1,19 +1,14 @@
 MODULES = lib/libape-spidermonkey.so
 
 include ../platform.mk
-CC	?= gcc
-CFLAGS	+= $(EXTRA_CFLAGS) -Wall -O2 -fPIC
+CFLAGS	+= $(EXTRA_CFLAGS) -Wall -O2 -fPIC -g
 LDFLAGS	+= $(EXTRA_LDFLAGS) 
 RM	?= rm -f
 
-ifeq ($(HAS_GPSEE), yes)
 GPSEE_CONFIG	?= gpsee-config
 CC		 = $(shell $(GPSEE_CONFIG) --cc)
 CPPFLAGS	+= $(shell $(GPSEE_CONFIG) --cppflags)
 LDFLAGS		+= $(shell $(GPSEE_CONFIG) --ldflags)
-else
-LDFLAGS		+= -lstdc++
-endif
 
 include ./mysql.mk
 ifeq ($(HAS_MYSQL), yes)
@@ -31,6 +26,10 @@ LD	= $(CC) -shared
 CFLAGS	+= -rdynamic
 endif
 
+ifdef SOLARIS_BUILD
+LD	= $(CC) -shared
+endif
+
 all: $(MODULES)
 
 build_debug:
@@ -40,4 +39,4 @@ lib/libape-spidermonkey.so: libape-spidermonkey.o
 	$(LD) $(LDFLAGS) $^ -o $@ $(LOADLIBES)
 
 clean:
-	$(RM) $(MODULES)
+	$(RM) $(MODULES) $(notdir $(MODULES:.so=.o))

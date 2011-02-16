@@ -20,18 +20,12 @@
 /* Javascript plugins support using spidermonkey API */
 /* HOWTO : http://www.ape-project.org/wiki/index.php/How_to_build_a_serverside_JS_module */
 
-#define XP_UNIX
-
 #include "../src/configure.h"
 #ifdef _USE_MYSQL
 #include <mysac.h>
 #endif
 
-#ifdef GPSEE
 #include <gpsee.h>
-#else
-#include <jsapi.h>
-#endif
 #include <stdio.h>
 #include <glob.h>
 #include "plugins.h"
@@ -42,7 +36,6 @@
 
 /* Return the global SpiderMonkey Runtime instance e.g. ASMR->runtime */
 #define ASMR ((ape_sm_runtime *)get_property(g_ape->properties, "sm_runtime")->val)
-#define ASMC ((JSContext *)get_property(g_ape->properties, "sm_context")->val)
 
 #define APEUSER_TO_JSOBJ(apeuser) \
 		 (JSObject *)get_property(apeuser->properties, "jsobj")->val
@@ -114,8 +107,7 @@ struct _ape_sm_compiled {
 
 typedef struct _ape_sm_runtime ape_sm_runtime;
 struct _ape_sm_runtime {
-	JSRuntime *runtime;
-	
+	gpsee_interpreter_t *jsi;
 	ape_sm_compiled *scripts;
 };
 
@@ -183,17 +175,6 @@ static JSClass apesocket_class = {
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
-
-#ifndef GPSEE
-/* Standard javascript object */
-static JSClass global_class = {
-	"global", JSCLASS_GLOBAL_FLAGS,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
-
-};
-#endif
 
 /* The main Ape Object (global) */
 static JSClass ape_class = {
@@ -1441,7 +1422,7 @@ static unsigned int ape_sm_cmd_wrapper(callbackp *callbacki)
 	struct _http_header_line *hlines;
 	
 	json_item *head = callbacki->param;
-	JSContext *cx = ASMC;
+	JSContext *cx = ASMR->jsi->cx;
 	
 	JSObject *obj; // param object
 	JSObject *cb; // cmd object
@@ -2893,46 +2874,19 @@ static void ape_fire_callback(const char *name, uintN argc, jsval *argv, acetabl
 
 static void init_module(acetables *g_ape) // Called when module is loaded
 {
-	JSRuntime *rt;
-	JSContext *gcx;
-#ifdef GPSEE
-        gpsee_interpreter_t *jsi = gpsee_createInterpreter();
-#endif
 	ape_sm_runtime *asr;
-#ifndef GPSEE
-	jsval rval;
-#endif
 	int i;
 	char rpath[512];
 	
 	glob_t globbuf;
 
-#ifdef GPSEE
-        rt = jsi->rt;
-#else
-        rt = JS_NewRuntime(128L * 1024L * 1024L);
-#endif
-	
-	if (rt == NULL) {
-		printf("[ERR] Not enougth memory\n");
-		exit(0);
-	}
 	asr = xmalloc(sizeof(*asr));
-	asr->runtime = rt;
 	asr->scripts = NULL;
 
 	/* Setup a global context to store shared object */
-#ifdef GPSEE
-	gcx = jsi->cx; 
-#else
-        gcx = JS_NewContext(rt, 8192);
-	JS_SetOptions(gcx, JSOPTION_VAROBJFIX | JSOPTION_JIT);
-	JS_SetVersion(gcx, JSVERSION_LATEST);
-	JS_InitStandardClasses(gcx, JS_NewObject(gcx, &global_class, NULL, NULL));
-#endif
-	JS_SetErrorReporter(gcx, reportError);
+	asr->jsi = gpsee_createInterpreter();
+	JS_SetErrorReporter(asr->jsi->cx, reportError);
 	
-	add_property(&g_ape->properties, "sm_context", gcx, EXTEND_POINTER, EXTEND_ISPRIVATE);
 	add_property(&g_ape->properties, "sm_runtime", asr, EXTEND_POINTER, EXTEND_ISPRIVATE);
 	
 	memset(rpath, '\0', sizeof(rpath));
@@ -2945,7 +2899,7 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 		ape_sm_compiled *asc = xmalloc(sizeof(*asc));
 	
 		asc->filename = (void *)xstrdup(globbuf.gl_pathv[i]);
-                asc->cx = JS_NewContext(rt, 8192);
+                asc->cx = gpsee_createContext(asr->jsi->realm);
 		
 		if (asc->cx == NULL) {
 			free(asc->filename);
@@ -2953,60 +2907,27 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 			continue;
 		}
 
-		//JS_SetGCZeal(asc->cx, 2);
-		
-		//JS_SetContextThread(asc->cx);
-#ifdef GPSEE
-		JS_BeginRequest(asc->cx);
-#else
-			JS_SetOptions(asc->cx, JSOPTION_VAROBJFIX | JSOPTION_JIT);
-			JS_SetVersion(asc->cx, JSVERSION_LATEST);
-#endif
-			JS_SetErrorReporter(asc->cx, reportError);
+                        asc->global = JS_NewGlobalObject(asc->cx, gpsee_getGlobalClass());
+                        gpsee_initGlobalObject(asc->cx, asr->jsi->realm, asc->global);
+			gpsee_modulizeGlobal(asc->cx, asr->jsi->realm, asc->global, asc->filename, i);
 
-#ifdef GPSEE
-                        asc->global = JS_NewObject(asc->cx, gpsee_getGlobalClass(), NULL, NULL);
-                        gpsee_initGlobalObject(asc->cx, asc->global, NULL, NULL);
-#else
-                        asc->global = JS_NewObject(asc->cx, &global_class, NULL, NULL);
-			JS_InitStandardClasses(asc->cx, asc->global);
-#endif		
 			/* define the Ape Object */
-			ape_sm_define_ape(asc, gcx, g_ape);
-#ifndef GPSEE
-			asc->bytecode = JS_CompileFile(asc->cx, asc->global, asc->filename);
-			
-			if (asc->bytecode != NULL) {
-				asc->scriptObj = JS_NewScriptObject(asc->cx, asc->bytecode);
+			ape_sm_define_ape(asc, asr->jsi->cx, g_ape);
 
-				/* Adding to the root (prevent the script to be GC collected) */
-				JS_AddNamedObjectRoot(asc->cx, &asc->scriptObj, asc->filename);
-#endif
 				/* put the Ape table on the script structure */
 				asc->g_ape = g_ape;
 
 				asc->callbacks.head = NULL;
 				asc->callbacks.foot = NULL;
 
-				/* Run the script */
-#ifdef GPSEE
-				gpsee_runProgramModule(asc->cx, asc->filename, NULL);
-#else
-				JS_ExecuteScript(asc->cx, asc->global, asc->bytecode, &rval);
-			}
-#endif
+				/* Run the script in GPSEE program context */
+                                asc->scriptObj = NULL;
+				JS_AddNamedObjectRoot(asc->cx, &asc->scriptObj, asc->filename);
+				gpsee_compileScript(asc->cx, asc->filename, NULL /*scriptFile*/, NULL /*const char *scriptCode*/,
+						    &asc->bytecode, asc->global, &asc->scriptObj);
 
-#ifdef GPSEE
-		JS_EndRequest(asc->cx);
-#endif
-		//JS_ClearContextThread(asc->cx);
-
-		if (asc->bytecode == NULL) {
-			/* cleaning memory */
-		} else {
 			asc->next = asr->scripts;
 			asr->scripts = asc;
-		}
 	}
 	globfree(&globbuf);
 	
@@ -3023,16 +2944,14 @@ static void free_module(acetables *g_ape) // Called when module is unloaded
 
 	while (asc != NULL) {
 		free(asc->filename);
-		JS_DestroyContext(asc->cx);
+		gpsee_destroyContext(asc->cx);
 		prev_asc = asc;
 		asc = asc->next;
 		free(prev_asc);
 	}
 
-	JS_DestroyContext(ASMC);
-	JS_DestroyRuntime(ASMR->runtime);
-
-	free(ASMR);
+	JS_RemoveObjectRoot(asc->cx, &asc->scriptObj);
+	gpsee_destroyInterpreter(ASMR->jsi);
 }
 
 static USERS *ape_cb_add_user(USERS *allocated, acetables *g_ape)
@@ -3054,7 +2973,7 @@ static USERS *ape_cb_allocateuser(ape_socket *client, const char *host, const ch
 {
 	JSObject *user;
 	extend *jsobj;
-	JSContext *gcx = ASMC;
+	JSContext *gcx = ASMR->jsi->cx;
 	jsval pipe;
 	
 	USERS *u = adduser(client, host, ip, NULL, g_ape);
@@ -3080,7 +2999,7 @@ static void ape_cb_del_user(USERS *user, int istmp, acetables *g_ape)
 	jsval params[1];
 	extend *jsobj;
 	JSObject *pipe;
-	JSContext *gcx = ASMC;
+	JSContext *gcx = ASMR->jsi->cx;
 	
 	if (!istmp) {
 		params[0] = OBJECT_TO_JSVAL(APEUSER_TO_JSOBJ(user));
@@ -3103,7 +3022,7 @@ static CHANNEL *ape_cb_mkchan(char *name, int flags, acetables *g_ape)
 	JSObject *js_channel;
 	extend *jsobj;
 	jsval params[1], pipe;
-	JSContext *gcx = ASMC;
+	JSContext *gcx = ASMR->jsi->cx;
 	CHANNEL *chan;
 
 	if ((chan = mkchan(name, flags, g_ape)) == NULL) {
@@ -3140,7 +3059,7 @@ static void ape_cb_rmchan(CHANNEL *chan, acetables *g_ape)
 	extend *jsobj;
 	jsval params[1];
 	JSObject *pipe;
-	JSContext *gcx = ASMC;
+	JSContext *gcx = ASMR->jsi->cx;
 	
 	params[0] = OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(chan));
 	
@@ -3189,7 +3108,7 @@ static void ape_cb_addsubuser(subuser *sub, acetables *g_ape)
 {
 	JSObject *subjs;
 	extend *jsobj;
-	JSContext *gcx = ASMC;
+	JSContext *gcx = ASMR->jsi->cx;
 	
 	subjs = JS_NewObject(gcx, &subuser_class, get_property(g_ape->properties, "subuser_proto")->val, NULL);
 	
@@ -3207,7 +3126,7 @@ static void ape_cb_addsubuser(subuser *sub, acetables *g_ape)
 static void ape_cb_delsubuser(subuser *sub, acetables *g_ape)
 {
 	extend *jsobj;
-	JSContext *gcx = ASMC;
+	JSContext *gcx = ASMR->jsi->cx;
 	
 	jsobj = get_property(sub->properties, "jsobj");
 	
