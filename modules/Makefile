@@ -8,6 +8,7 @@ RM	?= rm -f
 
 ifeq ($(HAS_GPSEE), yes)
 GPSEE_CONFIG	?= gpsee-config
+CC		 = $(shell $(GPSEE_CONFIG) --cc)
 CPPFLAGS	+= $(shell $(GPSEE_CONFIG) --cppflags)
 LDFLAGS		+= $(shell $(GPSEE_CONFIG) --ldflags)
 else
