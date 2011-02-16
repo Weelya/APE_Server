@@ -2877,7 +2877,8 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	ape_sm_runtime *asr;
 	int i;
 	char rpath[512];
-	
+	jsval rval;
+
 	glob_t globbuf;
 
 	asr = xmalloc(sizeof(*asr));
@@ -2909,7 +2910,7 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 
                         asc->global = JS_NewGlobalObject(asc->cx, gpsee_getGlobalClass());
                         gpsee_initGlobalObject(asc->cx, asr->jsi->realm, asc->global);
-			gpsee_modulizeGlobal(asc->cx, asr->jsi->realm, asc->global, asc->filename, i);
+//			gpsee_modulizeGlobal(asc->cx, asr->jsi->realm, asc->global, asc->filename, i);
 
 			/* define the Ape Object */
 			ape_sm_define_ape(asc, asr->jsi->cx, g_ape);
@@ -2925,6 +2926,7 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 				JS_AddNamedObjectRoot(asc->cx, &asc->scriptObj, asc->filename);
 				gpsee_compileScript(asc->cx, asc->filename, NULL /*scriptFile*/, NULL /*const char *scriptCode*/,
 						    &asc->bytecode, asc->global, &asc->scriptObj);
+                                JS_ExecuteScript(asc->cx, asc->global, asc->bytecode, &rval);
 
 			asc->next = asr->scripts;
 			asr->scripts = asc;

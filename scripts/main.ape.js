@@ -1,3 +1,5 @@
+print("111 hello, world");
+
 Ape.addEvent("init", function() {
 	include("framework/mootools.js");
 	include("framework/Http.js");
@@ -15,4 +17,5 @@ Ape.addEvent("init", function() {
 
 Ape.registerCmd("foo", false, function(params, cmd) { return [800, "bar"]  });
 
-print("hello, world");
+print("222 hello, world");
+
