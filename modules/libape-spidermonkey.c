@@ -2911,6 +2911,7 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 
                         asc->global = JS_NewGlobalObject(asc->cx, gpsee_getGlobalClass());
                         gpsee_initGlobalObject(asc->cx, asr->jsi->realm, asc->global);
+			JS_SetGlobalObject(asc->cx, asc->global);
 //			gpsee_modulizeGlobal(asc->cx, asr->jsi->realm, asc->global, asc->filename, i);
 
 			/* define the Ape Object */
