@@ -47,10 +47,10 @@
 
 #include <errno.h>
 
+int ape_server_is_running;
 static void signal_handler(int sign)
 {
-	server_is_running = 0;
-
+	ape_server_is_running= 0;
 }
 
 static int inc_rlimit(int nofile)
@@ -300,7 +300,7 @@ int main(int argc, char **argv)
 	
 	findandloadplugin(g_ape);
 
-	server_is_running = 1;
+	ape_server_is_running = 1;
 
 	/* Starting Up */
 	sockroutine(g_ape); /* loop */
@@ -325,9 +325,8 @@ int main(int argc, char **argv)
 	
 	hashtbl_free(g_ape->hCallback);
 	
-	free(g_ape->bufout);
-
 	ape_config_free(srv);
+	free_all_plugins(g_ape);
 
 	int i;
 	for (i = 0; i < g_ape->basemem; i++) {
@@ -335,10 +334,8 @@ int main(int argc, char **argv)
 			free(g_ape->co[i]);
 		}
 	}
-	free(g_ape->co);
-
-	free_all_plugins(g_ape);
-
+	free(g_ape->bufout);
+        free(g_ape->co);
 	free(g_ape);
 	
 	return 0;

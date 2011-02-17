@@ -256,7 +256,8 @@ static void check_idle(struct _socks_list *sl)
 unsigned int sockroutine(acetables *g_ape)
 {
 	struct _socks_list sl;
-	
+        extern int ape_server_is_running; /* From entry.c */
+
 	int new_fd, nfds, sin_size = sizeof(struct sockaddr_in), i, tfd = 0;
 
 	struct timeval t_start, t_end;	
@@ -270,7 +271,7 @@ unsigned int sockroutine(acetables *g_ape)
 	add_periodical(5, 0, check_idle, &sl, g_ape);
 	#endif
 	gettimeofday(&t_start, NULL);
-	while (server_is_running) {
+	while (ape_server_is_running) {
 		/* Linux 2.6.25 provides a fd-driven timer system. It could be usefull to implement */
 		int timeout_to_hang = get_first_timer_ms(g_ape);
 		nfds = events_poll(g_ape->events, timeout_to_hang);

@@ -25,7 +25,8 @@
 #include <mysac.h>
 #endif
 
-#include <gpsee.h>
+#define GPSEE_JSAPI_PROGRAM
+#include <gpsee-jsapi.h>
 #include <stdio.h>
 #include <glob.h>
 #include "plugins.h"
@@ -2946,11 +2947,11 @@ static void free_module(acetables *g_ape) // Called when module is unloaded
 
 	while (asc != NULL) {
 		free(asc->filename);
+                JS_RemoveObjectRoot(asc->cx, &asc->scriptObj);
 		gpsee_destroyContext(asc->cx);
 		prev_asc = asc;
 		asc = asc->next;
 		free(prev_asc);
-                JS_RemoveObjectRoot(asc->cx, &asc->scriptObj);
 	}
 
 	gpsee_destroyInterpreter(ASMR->jsi);
