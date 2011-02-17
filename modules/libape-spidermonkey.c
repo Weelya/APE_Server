@@ -2944,10 +2944,13 @@ static void free_module(acetables *g_ape) // Called when module is unloaded
 
 	ape_sm_compiled *asc = ASMR->scripts;
 	ape_sm_compiled *prev_asc;
+        ape_sm_callback *cb;
 
 	while (asc != NULL) {
 		free(asc->filename);
                 JS_RemoveObjectRoot(asc->cx, &asc->scriptObj);
+                for (cb = asc->callbacks.head; cb; cb = cb->next)
+                  JS_RemoveValueRoot(asc->cx, &cb->func);
 		gpsee_destroyContext(asc->cx);
 		prev_asc = asc;
 		asc = asc->next;
