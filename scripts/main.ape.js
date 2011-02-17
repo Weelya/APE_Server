@@ -1,5 +1,3 @@
-print("111 hello, world");
-
 Ape.addEvent("init", function() {
 	include("framework/mootools.js");
 	include("framework/Http.js");
@@ -14,8 +12,6 @@ Ape.addEvent("init", function() {
 	//include("framework/http_auth.js");
 });
 
-
-Ape.registerCmd("foo", false, function(params, cmd) { return [800, "bar"]  });
-
-print("222 hello, world");
-
+// Ape.registerCmd("foo", false, function(params, cmd) { return [800, "bar"]  });
+// http://192.168.2.110:6969/?[{"cmd":"foo"}]
+// [{"time":"1297979089","raw":"ERR","data":{"code":"800","value":"bar"}}]
