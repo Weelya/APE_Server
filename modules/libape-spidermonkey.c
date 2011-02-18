@@ -1625,7 +1625,8 @@ APE_JS_NATIVE(ape_sm_include)
 	JSScript *bytecode;
 	jsval frval;
 	char rpath[512];
-	
+	const char *s;
+
 	if (argc != 1) {
 		return JS_TRUE;
 	}
@@ -1633,10 +1634,11 @@ APE_JS_NATIVE(ape_sm_include)
 	if (!JS_ConvertArguments(cx, 1, argv, "s", &file)) {
 		return JS_TRUE;
 	}
-	
-	memset(rpath, '\0', sizeof(rpath));
-	strncpy(rpath, READ_CONF("scripts_path"), 255);
-	strncat(rpath, file, 255);
+
+	s = READ_CONF("scripts_path");
+	if (!s)
+	  return gpsee_throw(cx, MODULE_ID ".include.scripts_path: scripts_path is missing from APE's config file");
+	snprintf(rpath, sizeof(rpath), "%s%s%s", s, (s[strlen(s) - 1] == '/' ? "" : "/"), file);
 	
 	if (!g_ape->is_daemon) {
 		printf("[JS] Loading script %s...\n", rpath);
@@ -2882,8 +2884,8 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	int i;
 	char rpath[512];
 	jsval rval;
-
 	glob_t globbuf;
+	const char *s;
 
 	asr = xmalloc(sizeof(*asr));
 	asr->scripts = NULL;
@@ -2896,10 +2898,16 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	JS_SetErrorReporter(asr->jsi->cx, reportError);
 	
 	add_property(&g_ape->properties, "sm_runtime", asr, EXTEND_POINTER, EXTEND_ISPRIVATE);
-	
-	memset(rpath, '\0', sizeof(rpath));
-	strncpy(rpath, READ_CONF("scripts_path"), 256);
-	strcat(rpath, "/*.ape.js");
+
+	s = READ_CONF("scripts_path");
+	if (!s)
+	{
+	  extern int ape_server_is_running;
+	  ape_server_is_running = 0;
+	  fprintf(stderr, " *** Fatal Error: scripts_path is not specified in APE's config file\n");
+	  return;
+	}
+	snprintf(rpath, sizeof(rpath), "%s%s%s", s, (s[strlen(s) - 1] == '/' ? "" : "/"), "*.ape.js");
 	
 	glob(rpath, 0, NULL, &globbuf);
 	
@@ -2918,7 +2926,6 @@ static void init_module(acetables *g_ape) // Called when module is loaded
                         asc->global = JS_NewGlobalObject(asc->cx, gpsee_getGlobalClass());
                         gpsee_initGlobalObject(asc->cx, asr->jsi->realm, asc->global);
 			JS_SetGlobalObject(asc->cx, asc->global);
-//			gpsee_modulizeGlobal(asc->cx, asr->jsi->realm, asc->global, asc->filename, i);
 
 			/* define the Ape Object */
 			ape_sm_define_ape(asc, asr->jsi->cx, g_ape);
