@@ -1,3 +1,8 @@
+#WITH_GPSEE_DEBUGGER=Yes
+ifdef WITH_GPSEE_DEBUGGER
+CPPFLAGS += -I/var/surelynx/gpsee/apr_surelynx/ "-DGPSEE_DEBUGGER=\"/var/surelynx/platform/SunOS-5.10-sun4u-sparc/lib/apr_surelynx/jsdb/debugger.js\""
+endif
+
 MODULES = lib/libape-spidermonkey.so
 
 include ../platform.mk
@@ -9,6 +14,9 @@ GPSEE_CONFIG	?= gpsee-config
 CC		 = $(shell $(GPSEE_CONFIG) --cc)
 CPPFLAGS	+= $(shell $(GPSEE_CONFIG) --cppflags)
 LDFLAGS		+= $(shell $(GPSEE_CONFIG) --ldflags)
+ifdef WITH_GPSEE_DEBUGGER
+LDFLAGS := $(filter-out -lgpsee,$(LDFLAGS)) -lgpsee -lgpsee-jsdb
+endif
 
 include ./mysql.mk
 ifeq ($(HAS_MYSQL), yes)

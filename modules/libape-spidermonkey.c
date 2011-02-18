@@ -108,8 +108,11 @@ struct _ape_sm_compiled {
 
 typedef struct _ape_sm_runtime ape_sm_runtime;
 struct _ape_sm_runtime {
-	gpsee_interpreter_t *jsi;
-	ape_sm_compiled *scripts;
+	gpsee_interpreter_t 	*jsi;
+	ape_sm_compiled 	*scripts;
+#ifdef GPSEE_DEBUGGER
+	JSDContext    	     	*jsdc;
+#endif
 };
 
 struct _ape_sock_callbacks {
@@ -2887,6 +2890,9 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 
 	/* Setup a global context to store shared object */
 	asr->jsi = gpsee_createInterpreter();
+#ifdef GPSEE_DEBUGGER
+	asr->jsdc = gpsee_initDebugger(asr->jsi->cx, asr->jsi->realm, GPSEE_DEBUGGER);
+#endif
 	JS_SetErrorReporter(asr->jsi->cx, reportError);
 	
 	add_property(&g_ape->properties, "sm_runtime", asr, EXTEND_POINTER, EXTEND_ISPRIVATE);
@@ -2943,6 +2949,9 @@ static void free_module(acetables *g_ape) // Called when module is unloaded
 {
 	// TODO free other allocated objects
 
+#ifdef GPSEE_DEBUGGER
+	gpsee_finiDebugger(ASMR->jsdc);		/* Known to crash - finalizer/design bug in jsdb */
+#endif
 	ape_sm_compiled *asc = ASMR->scripts;
 	ape_sm_compiled *prev_asc;
         ape_sm_callback *cb;
