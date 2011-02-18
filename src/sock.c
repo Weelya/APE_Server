@@ -41,7 +41,7 @@
 #include "parser.h"
 
 static int sendqueue(int sock, acetables *g_ape);
-
+extern int ape_server_is_running; /* From entry.c */
 
 static void growup(int *basemem, ape_socket ***conn_ptr, struct _fdevent *ev, struct _socks_bufout **bufout)
 {
@@ -84,7 +84,8 @@ ape_socket *ape_listen(unsigned int port, char *listen_ip, acetables *g_ape)
 	{
 		ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
 			"ape_listen() - bind()");
-		printf("Error: cannot bind to port %i; %s\n", port, strerror(errno));
+		fprintf(stderr, "\007 *** Fatal Error: cannot bind to port %i; %s\n", port, strerror(errno));
+		ape_server_is_running = 0;
 		return NULL;
 	}
 
@@ -256,7 +257,6 @@ static void check_idle(struct _socks_list *sl)
 unsigned int sockroutine(acetables *g_ape)
 {
 	struct _socks_list sl;
-        extern int ape_server_is_running; /* From entry.c */
 
 	int new_fd, nfds, sin_size = sizeof(struct sockaddr_in), i, tfd = 0;
 

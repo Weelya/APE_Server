@@ -67,6 +67,11 @@ void findandloadplugin(acetables *g_ape)
 	glob_t globbuf;
 	glob(modules_path, 0, NULL, &globbuf);
 
+	if (globbuf.gl_pathc == 0) {
+	  extern int ape_server_is_running;
+	  fprintf(stderr, " *** Fatal Error: no plug-ins matching '%s'!\n", modules_path);
+	  ape_server_is_running = 0;
+	}
 	
 	for (i = 0; i < globbuf.gl_pathc; i++) {
 		ace_plugins *pcurrent;

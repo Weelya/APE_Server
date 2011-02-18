@@ -47,10 +47,10 @@
 
 #include <errno.h>
 
-int ape_server_is_running;
+int ape_server_is_running = 1;
 static void signal_handler(int sign)
 {
-	ape_server_is_running= 0;
+	ape_server_is_running = 0;
 }
 
 static int inc_rlimit(int nofile)
@@ -156,6 +156,8 @@ int main(int argc, char **argv)
 	g_ape->is_daemon = 0;
 	
 	ape_log_init(g_ape);
+	ape_log(APE_INFO, __FILE__, __LINE__, g_ape, 
+		"APE starting up - pid : %i", getpid());
 	
 	fdev.handler = EVENT_UNKNOWN;
 
@@ -184,9 +186,6 @@ int main(int argc, char **argv)
 	};
 	
 	serverfd = servers_init(g_ape);
-	
-	ape_log(APE_INFO, __FILE__, __LINE__, g_ape, 
-		"APE starting up - pid : %i", getpid());
 	
 	if (strcmp(CONFIG_VAL(Server, daemon, srv), "yes") == 0 && (pidfile = CONFIG_VAL(Server, pid_file, srv)) != NULL) {
 		if ((pidfd = open(pidfile, O_TRUNC | O_WRONLY | O_CREAT, 0655)) == -1) {
@@ -262,7 +261,7 @@ int main(int argc, char **argv)
 		printf(" / _ \\|  _/ _| \n");
 		printf("/_/ \\_\\_| |___|\nAJAX Push Engine\n\n");
 
-		printf("Bind on port %i\n\n", atoi(CONFIG_VAL(Server, port, srv)));
+		printf("Listening on port %i\n\n", atoi(CONFIG_VAL(Server, port, srv)));
 		printf("Version : %s\n", _VERSION);
 		printf("Build   : %s %s\n", __DATE__, __TIME__);
 		printf("Author  : Weelya (contact@weelya.com)\n\n");		
@@ -299,8 +298,6 @@ int main(int argc, char **argv)
 	transport_start(g_ape);	
 	
 	findandloadplugin(g_ape);
-
-	ape_server_is_running = 1;
 
 	/* Starting Up */
 	sockroutine(g_ape); /* loop */

@@ -170,7 +170,7 @@ static ace_plugin_infos infos_module = {
 	"Javascript embeded", 	// Module Name
 	"0.01",			// Module Version
 	"Anthony Catel",	// Module Author
-	"javascript.conf"			// Config file
+	"javascript.conf"	// Config file
 };
 
 static JSClass apesocket_class = {

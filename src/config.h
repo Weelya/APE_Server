@@ -23,8 +23,9 @@
 #define _CONFIG_H
 
 
-#define APE_CONFIG_FILE "ape.conf"
-
+#if !defined(APE_CONFIG_FILE)
+# define APE_CONFIG_FILE "ape.conf"
+#endif
 
 typedef struct _apeconfig_def {
 	char *val;

@@ -46,4 +46,4 @@ uninstall:
 
 clean:
 	$(RM) $(EXEC) $(LIBRARY)
-	$(RM) $(LIBAPED_SRC:.c=.o)
+	$(RM) $(LIBAPED_SRC:.c=.o) $(APED_SRC:.c=.o)
