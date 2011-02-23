@@ -374,6 +374,7 @@ unsigned int sockroutine(acetables *g_ape)
 
 								close_socket(active_fd, g_ape);
 								tfd--;
+								continue;
 							}							
 						} else if (g_ape->bufout[active_fd].buf != NULL) {
 
