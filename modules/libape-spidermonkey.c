@@ -174,7 +174,7 @@ static ace_plugin_infos infos_module = {
 };
 
 static JSClass apesocket_class = {
-  GPSEE_CLASS_NAME("apesocket"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(apesocket), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
@@ -182,70 +182,70 @@ static JSClass apesocket_class = {
 
 /* The main Ape Object (global) */
 static JSClass ape_class = {
-  GPSEE_CLASS_NAME("Ape"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(Ape), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass b64_class = {
-  GPSEE_CLASS_NAME("base64"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(base64), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass sha1_class = {
-  GPSEE_CLASS_NAME("sha1"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(sha1), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass socketserver_class = {
-  GPSEE_CLASS_NAME("sockServer"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(sockServer), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass socketclient_class = {
-  GPSEE_CLASS_NAME("sockClient"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(sockClient), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass raw_class = {
-  GPSEE_CLASS_NAME("raw"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(raw), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass user_class = {
-  GPSEE_CLASS_NAME("user"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(user), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass subuser_class = {
-  GPSEE_CLASS_NAME("subuser"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(subuser), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass channel_class = {
-  GPSEE_CLASS_NAME("channel"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(channel), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass pipe_class = {
-  GPSEE_CLASS_NAME("pipe"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(pipe), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
@@ -253,7 +253,7 @@ static JSClass pipe_class = {
 
 #ifdef _USE_MYSQL
 static JSClass mysql_class = {
-  GPSEE_CLASS_NAME("MySQL"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(MySQL), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, apemysql_finalize,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
@@ -261,7 +261,7 @@ static JSClass mysql_class = {
 #endif
 
 static JSClass cmdresponse_class = {
-  GPSEE_CLASS_NAME("cmdresponse"), JSCLASS_HAS_PRIVATE,
+  GPSEE_CLASS_NAME(cmdresponse), JSCLASS_HAS_PRIVATE,
 	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
@@ -1635,9 +1635,10 @@ APE_JS_NATIVE(ape_sm_include)
 		return JS_TRUE;
 	}
 
+	errno = 0;
 	s = READ_CONF("scripts_path");
 	if (!s)
-	  return gpsee_throw(cx, MODULE_ID ".include.scripts_path: scripts_path is missing from APE's config file");
+	  return gpsee_throw(cx, MODULE_ID ".include.config: Could not read module's config file (%s)", strerror(errno));
 	snprintf(rpath, sizeof(rpath), "%s%s%s", s, (s[strlen(s) - 1] == '/' ? "" : "/"), file);
 	
 	if (!g_ape->is_daemon) {
@@ -2899,12 +2900,13 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	
 	add_property(&g_ape->properties, "sm_runtime", asr, EXTEND_POINTER, EXTEND_ISPRIVATE);
 
+	errno = 0;
 	s = READ_CONF("scripts_path");
 	if (!s)
 	{
 	  extern int ape_server_is_running;
 	  ape_server_is_running = 0;
-	  fprintf(stderr, " *** Fatal Error: scripts_path is not specified in APE's config file\n");
+	  fprintf(stderr, " *** Fatal Error: could not read module's config file (%s)\n", strerror(errno));
 	  return;
 	}
 	snprintf(rpath, sizeof(rpath), "%s%s%s", s, (s[strlen(s) - 1] == '/' ? "" : "/"), "*.ape.js");
