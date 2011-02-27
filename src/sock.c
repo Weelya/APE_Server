@@ -84,7 +84,7 @@ ape_socket *ape_listen(unsigned int port, char *listen_ip, acetables *g_ape)
 	{
 		ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
 			"ape_listen() - bind()");
-		fprintf(stderr, "\007 *** Fatal Error: cannot bind to port %i; %s\n", port, strerror(errno));
+		printf("Error: cannot bind to port %i; %s\n", port, strerror(errno));
 		ape_server_is_running = 0;
 		return NULL;
 	}
