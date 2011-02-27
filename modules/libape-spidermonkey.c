@@ -692,40 +692,39 @@ static JSBool sm_send_raw(JSContext *cx, transpipe *to_pipe, int chl, uintN argc
 		json_set_property_intN(jstr, "chl", 3, chl);
 	}
 	
-	newraw = forge_raw(raw, jstr);
-	
-	if (to_pipe->type == CHANNEL_PIPE) {
+	if (to_pipe->type == CHANNEL_PIPE && ((struct CHANNEL *)to_pipe->pipe)->head != NULL) {
 		if (options != NULL && JS_GetProperty(cx, options, "restrict", &vp) && JSVAL_IS_OBJECT(vp) && JS_InstanceOf(cx, JSVAL_TO_OBJECT(vp), &user_class, 0) == JS_TRUE) {
 			JSObject *userjs = JSVAL_TO_OBJECT(vp);
 			USERS *user = JS_GetPrivate(cx, userjs);
 			
 			if (user == NULL) {
-				free_raw(newraw);
-				
+			    free_json_item(jstr);
 				return JS_TRUE;
 			}
-			
-			post_raw_channel_restricted(newraw, to_pipe->pipe, user, g_ape);
+
+			post_raw_channel_restricted(forge_raw(raw, jstr), to_pipe->pipe, user, g_ape);
 			
 			return JS_TRUE;
 		}
-		post_raw_channel(newraw, to_pipe->pipe, g_ape);
-	} else {
+		post_raw_channel(forge_raw(raw, jstr), to_pipe->pipe, g_ape);
+	} else if (to_pipe->type != CHANNEL_PIPE) {
 		if (options != NULL && JS_GetProperty(cx, options, "restrict", &vp) && JSVAL_IS_OBJECT(vp) && JS_InstanceOf(cx, JSVAL_TO_OBJECT(vp), &subuser_class, 0) == JS_TRUE) {
 			JSObject *subjs = JSVAL_TO_OBJECT(vp);
 			subuser *sub = JS_GetPrivate(cx, subjs);
 			
 			if (sub == NULL || ((USERS *)to_pipe->pipe)->nsub < 2 || to_pipe->pipe != sub->user) {
-				free_raw(newraw);
+			    free_json_item(jstr);
 				return JS_TRUE;
 			}
 
-			post_raw_restricted(newraw, to_pipe->pipe, sub, g_ape);
+			post_raw_restricted(forge_raw(raw, jstr), to_pipe->pipe, sub, g_ape);
 			
 			return JS_TRUE;
 
 		}
-		post_raw(newraw, to_pipe->pipe, g_ape);
+		post_raw(forge_raw(raw, jstr), to_pipe->pipe, g_ape);
+	} else {
+	    free_json_item(jstr);
 	}
 	
 	return JS_TRUE;
@@ -2443,7 +2442,7 @@ static void mysac_query_success(struct _ape_mysql_data *myhandle, int code)
 
 		JS_CallFunctionValue(myhandle->cx, myhandle->jsmysql, queue->callback, 2, params, &rval);
 	}
-	JS_RemoveObjectRoot(myhandle->cx, &queue->callback);
+	JS_RemoveValueRoot(myhandle->cx, &queue->callback);
 	
 	free(queue->query);
 	free(queue->res);
@@ -2519,7 +2518,7 @@ static struct _ape_mysql_queue *apemysql_push_queue(struct _ape_mysql_data *myha
 	}
 	myhandle->queue.foot = nqueue;
 	
-	JS_AddObjectRoot(myhandle->cx, &nqueue->callback);
+	JS_AddValueRoot(myhandle->cx, &nqueue->callback);
 
 	if (myhandle->queue.head->next == NULL && myhandle->state == SQL_READY_FOR_QUERY) {
 		
@@ -2939,13 +2938,11 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	
 		asc->filename = (void *)xstrdup(globbuf.gl_pathv[i]);
                 asc->cx = gpsee_createContext(asr->jsi->realm);
-		
 		if (asc->cx == NULL) {
 			free(asc->filename);
 			free(asc);
 			continue;
 		}
-
                         asc->global = JS_NewGlobalObject(asc->cx, gpsee_getGlobalClass());
                         gpsee_initGlobalObject(asc->cx, asr->jsi->realm, asc->global);
 			JS_SetGlobalObject(asc->cx, asc->global);
@@ -2977,7 +2974,6 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 
 static void free_module(acetables *g_ape) // Called when module is unloaded
 {
-	// TODO free other allocated objects
 
 #ifdef GPSEE_DEBUGGER
 	gpsee_finiDebugger(ASMR->jsdc);		/* Known to crash - finalizer/design bug in jsdb */
