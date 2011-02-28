@@ -33,7 +33,7 @@ ace_plugins *loadplugin(char *file)
 	//ace_plugin_infos *infos;
 	ace_plugins *plug;
 	
-	hwnd = dlopen(file, RTLD_LAZY);
+	hwnd = dlopen(file, RTLD_LAZY | RTLD_GLOBAL);
 	
 	if (!hwnd) {
 		printf("[Module] Failed to load %s [Invalid library] (%s)\n", file, dlerror());
