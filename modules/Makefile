@@ -6,7 +6,7 @@ endif
 MODULES = lib/libape-spidermonkey.so
 
 include ../platform.mk
-CFLAGS	+= $(EXTRA_CFLAGS) -Wall -O2 -fPIC -g
+CFLAGS	+= $(EXTRA_CFLAGS) -Wall -O0 -fPIC -g
 LDFLAGS	+= $(EXTRA_LDFLAGS) 
 RM	?= rm -f
 

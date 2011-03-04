@@ -1644,6 +1644,10 @@ APE_JS_NATIVE(ape_sm_include)
 	jsval frval;
 	char rpath[512];
 	const char *s;
+	gpsee_realm_t	*realm = gpsee_getRealm(cx);
+	JSObject	*globalObject = realm->globalObject;
+
+printf("%s:\tglobal object is at: %p\n", __FUNCTION__, realm->globalObject);
 
 	if (argc != 1) {
 		return JS_TRUE;
@@ -1663,7 +1667,7 @@ APE_JS_NATIVE(ape_sm_include)
 		printf("[JS] Loading script %s...\n", rpath);
 	}
 
-	bytecode = JS_CompileFile(cx, JS_GetGlobalObject(cx), rpath);
+	bytecode = JS_CompileFile(cx, globalObject, rpath);
 	
 	if (bytecode == NULL) {
 		if (!g_ape->is_daemon) {
@@ -1675,7 +1679,19 @@ APE_JS_NATIVE(ape_sm_include)
 	/* Adding to the root (prevent the script to be GC collected) */
 //	JS_AddNamedRoot(cx, &scriptObj, file);
 	
-	JS_ExecuteScript(cx, JS_GetGlobalObject(cx), bytecode, &frval);	
+	if (JS_ExecuteScript(cx, globalObject, bytecode, &frval) != JS_TRUE)
+	{
+	  if (JS_IsExceptionPending(cx))
+          {
+	    gpsee_reportUncaughtException(cx, JSVAL_NULL, 0);
+	    JS_ClearPendingException(cx);
+	  }
+          else
+	  {
+	    /** Impossible unless bug in C code that returns JS_FALSE without setting an exception */
+	    fprintf(stderr, "Warning: trouble executing script %s detected in %s:%i\n", rpath, __FILE__, __LINE__);
+	  }
+	}
 	
 	return JS_TRUE;
 }
@@ -2943,8 +2959,9 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 			free(asc);
 			continue;
 		}
-                        asc->global = JS_NewGlobalObject(asc->cx, gpsee_getGlobalClass());
-                        gpsee_initGlobalObject(asc->cx, asr->jsi->realm, asc->global);
+                        asc->global = asr->jsi->realm->globalObject;
+//                        asc->global = JS_NewGlobalObject(asc->cx, gpsee_getGlobalClass());
+//                        gpsee_initGlobalObject(asc->cx, asr->jsi->realm, asc->global);
 			JS_SetGlobalObject(asc->cx, asc->global);
 
 			/* define the Ape Object */
@@ -2959,9 +2976,11 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 				/* Run the script in GPSEE program context */
                                 asc->scriptObj = NULL;
 				JS_AddNamedObjectRoot(asc->cx, &asc->scriptObj, asc->filename);
-				gpsee_compileScript(asc->cx, asc->filename, NULL /*scriptFile*/, NULL /*const char *scriptCode*/,
-						    &asc->bytecode, asc->global, &asc->scriptObj);
-                                JS_ExecuteScript(asc->cx, asc->global, asc->bytecode, &rval);
+				if (gpsee_compileScript(asc->cx, asc->filename, NULL /*scriptFile*/, NULL /*const char *scriptCode*/,
+						    &asc->bytecode, asc->global, &asc->scriptObj) == JS_TRUE)
+				  JS_ExecuteScript(asc->cx, asc->global, asc->bytecode, &rval);
+				else
+				  fprintf(stderr, " *** Could not execute module '%s'\n", asc->filename);
 
 			asc->next = asr->scripts;
 			asr->scripts = asc;
