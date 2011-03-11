@@ -5,7 +5,7 @@ include	./platform.mk
 EXEC=bin/aped
 LIBRARY=lib/libaped.so
 
-prefix		= /usr/local
+prefix		= /opt/PMItic
 bindir		= $(prefix)/bin
 libdir		= $(prefix)/lib
 
@@ -15,9 +15,10 @@ LIBAPED_SRC	= src/sock.c src/hash.c src/handle_http.c src/cmd.c src/users.c src/
 		  src/sha1.c src/log.c src/parser.c src/md5.c src/event_select.c
 APED_SRC	= src/entry.c
 
-CFLAGS 		+= -Wall -O0 -g $(EXTRA_CFLAGS)
+CFLAGS 		+= -Wall -O0 -g $(EXTRA_CFLAGS) 
 CPPFLAGS 	+= -I ./deps/udns-0.0.9/ -D_GNU_SOURCE
-LDFLAGS		+= -ldl -lm -lpthread -Wl,-rpath=$(libdir) -L$(dir $(LIBRARY)) $(EXTRA_LDFLAGS) -Wl,-rpath=$(abspath $(dir $(LIBRARY)))
+#LDFLAGS		+= -ldl -lm -lpthread -Wl,-rpath=$(libdir) -L$(dir $(LIBRARY)) $(EXTRA_LDFLAGS) -Wl,-rpath=$(abspath $(dir $(LIBRARY)))
+LDFLAGS		+= -ldl -lm -lpthread -Wl,-rpath=$(libdir) -L$(dir $(LIBRARY)) $(EXTRA_LDFLAGS)
 CC		= $(shell $(GPSEE_CONFIG) --cc)
 LD		= $(CC) -shared
 RM		= rm -f
@@ -47,3 +48,4 @@ uninstall:
 clean:
 	$(RM) $(EXEC) $(LIBRARY)
 	$(RM) $(LIBAPED_SRC:.c=.o) $(APED_SRC:.c=.o)
+

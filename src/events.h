@@ -55,8 +55,8 @@ typedef enum {
 #ifdef USE_SELECT_HANDLER
 typedef struct {
   int  fd;
-  char read:2;		/* First bit: 	in use */
-  char write:2;		/* Second bit: 	pending data */
+  char read:4;		/* bitmask */
+  char write:4;		/* bitmask */
 } select_fd_t;
 #endif
 
@@ -103,4 +103,10 @@ int event_kqueue_init(struct _fdevent *ev);
 int event_epoll_init(struct _fdevent *ev);
 int event_select_init(struct _fdevent *ev);
 
+#ifndef USE_SELECT_HANDLER
+static inline ssize_t event_write(struct _fdevent *ev, int fd, const void *buf, size_t nbyte)
+{
+  return write(fd, buf, nbyte);
+}
+#endif
 #endif

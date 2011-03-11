@@ -30,6 +30,41 @@
 #include <errno.h>
 
 #ifdef USE_SELECT_HANDLER
+
+#ifndef MIN_TIMEOUT_MS
+# ifdef DEBUG_EVENT_SELECT
+#  define MIN_TIMEOUT_MS	1
+# else
+#  define MIN_TIMEOUT_MS	150
+# endif
+#endif
+
+typedef enum
+{
+  evsb_none 		= 0,
+  evsb_added 		= 1,	/**< descriptor has been added to list */
+  evsb_ready 		= 2,	/**< descriptor is ready to read or write */
+  evsb_writeWatch	= 4	/**< descriptor should be watched for writes */
+} evsb_bit_t;	/**< event status bits; must fit in a nibble */
+
+/* To similate edge-based polling, we only select() for write on descriptors
+ * which are flagged with evsb_watch; otherwise, we wind up in a tight loop
+ * that constainly writes] zero bytes.
+ *
+ * In order for this to work, all writes to sockets must be done through
+ * event_write().
+ */
+ssize_t event_write(struct _fdevent *ev, int fd, const void *buf, size_t nbyte)
+{
+  ssize_t n;
+
+  n = write(fd, buf, nbyte);
+  if ((n != -1) && (n != nbyte))
+    ev->fds[fd].write |= evsb_writeWatch;
+
+  return n;
+}
+
 /**
  *  Mark a file descriptor as "in use" by setting the first bit in the corresponding 
  *  array entry.
@@ -43,10 +78,10 @@ static int event_select_add(struct _fdevent *ev, int fd, int bitadd)
   }
   
   if (bitadd & EVENT_READ) 
-    ev->fds[fd].read |= 1;
+    ev->fds[fd].read |= evsb_added;
 
   if (bitadd & EVENT_WRITE) 
-    ev->fds[fd].write |= 1;
+    ev->fds[fd].write |= evsb_added;
 
   ev->fds[fd].fd = fd;
 
@@ -67,56 +102,68 @@ static int event_select_remove(struct _fdevent *ev, int fd)
  */
 static int event_select_poll(struct _fdevent *ev, int timeout_ms)
 {
-  struct timeval tv;
-  int		 fd, i, maxfd, numfds;
-  fd_set	 rfds, wfds, efds;
+  struct timeval	tv;
+  int	 		fd, i, maxfd, numfds;
+  fd_set		rfds, wfds;
+#ifdef DEBUG_EVENT_SELECT
+  int			rcount = 0;
+  int			wcount = 0;
+#endif
 
-  memset(&tv, 0, sizeof(tv));
+  if (timeout_ms < MIN_TIMEOUT_MS)
+    timeout_ms = MIN_TIMEOUT_MS;
+
   tv.tv_sec = timeout_ms / 1000;
   tv.tv_usec = (timeout_ms % 1000) * 1000;
 
   FD_ZERO(&rfds);
   FD_ZERO(&wfds);
-  FD_ZERO(&efds);
 
   for (fd=0, maxfd=0; fd < MAX_SELECT_FDS; fd++)
   {
     if (ev->fds[fd].read)
       FD_SET(fd, &rfds);
-    if (ev->fds[fd].write)
+    if (ev->fds[fd].write & evsb_writeWatch)
       FD_SET(fd, &wfds);
     if (ev->fds[fd].read || ev->fds[fd].write)
     {
-      FD_SET(fd, &efds);
       if (fd > maxfd)
 	maxfd = fd;
     }
+#ifdef DEBUG_EVENT_SELECT
+    if (ev->fds[fd].read)
+      rcount++;
+    if (ev->fds[fd].write & evsb_writeWatch)
+      wcount++;
+#endif
   }
+
+#ifdef DEBUG_EVENT_SELECT
+  fprintf(stderr, "Watching %i read, %i write fds (total %i) for %i ms\n", rcount, wcount, maxfd + 1, timeout_ms);
+#endif
   
   errno = 0;
-  numfds = select(maxfd + 1, &rfds, &wfds, &efds, &tv);
-
-  if (numfds == -1)
-    return -1;
+  numfds = select(maxfd + 1, &rfds, &wfds, NULL, &tv);
+  switch(numfds)
+  {
+    case -1:
+      fprintf(stderr, "Error calling select: %s\n", strerror(errno));
+    case 0:
+      return numfds;
+  }
 
   /* Mark pending data */
   for (fd=0; fd <= maxfd; fd++)
   {
-    if (FD_ISSET(fd, &efds))
-    {
-      printf("XXX ignoring fd %i with OOB data\n", fd);
-      continue;
-    }
-
     if (FD_ISSET(fd, &rfds))
-      ev->fds[fd].read |= 2;
+      ev->fds[fd].read |= evsb_ready;
     else
-      ev->fds[fd].read &= 1;
+      ev->fds[fd].read &= ~evsb_ready;
 
     if (FD_ISSET(fd, &wfds))
-      ev->fds[fd].write |= 2;
+      ev->fds[fd].write |= evsb_ready;
     else
-      ev->fds[fd].write &= 1;
+      ev->fds[fd].write &= evsb_ready;
   }
   
   /* Create the events array for event_select_revent et al */
@@ -149,15 +196,14 @@ static int event_select_revent(struct _fdevent *ev, int i)
   int bitret = 0;
   int fd = ev->events[i]->fd;
 
-  if (ev->fds[fd].read & 0x02)
+  if (ev->fds[fd].read & evsb_ready)
     bitret |= EVENT_READ;
 
-  if (ev->fds[fd].write & 0x02)
+  if (ev->fds[fd].write & evsb_ready)
     bitret |= EVENT_WRITE;
 
-  /* reset pending data bits */
-  ev->fds[fd].read &= 0x01;
-  ev->fds[fd].write &= 0x01;
+  ev->fds[fd].read &= evsb_added;	/* clear ready */
+  ev->fds[fd].write &= evsb_added;	/* clear ready and writeWatch */
 
   return bitret;
 }

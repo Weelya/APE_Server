@@ -532,7 +532,7 @@ static int sendqueue(int sock, acetables *g_ape)
 	r_bytes = bufout->buflen;
 	
 	while(t_bytes < bufout->buflen) {
-		n = write(sock, bufout->buf + t_bytes, r_bytes);
+		n = event_write(g_ape->events, sock, bufout->buf + t_bytes, r_bytes);
 		if (n == -1) {
 			if (errno == EAGAIN && r_bytes > 0) {
 				/* Still not complete */
@@ -565,7 +565,7 @@ int sendbin(int sock, const char *bin, unsigned int len, unsigned int burn_after
 	if (sock != 0) {
 		while(t_bytes < len) {
 			if (g_ape->bufout[sock].buf == NULL) {
-				n = write(sock, bin + t_bytes, r_bytes);
+				n = event_write(g_ape->events, sock, bin + t_bytes, r_bytes);
 			} else {
 				n = -2;
 			}
