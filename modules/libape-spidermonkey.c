@@ -1647,8 +1647,6 @@ APE_JS_NATIVE(ape_sm_include)
 	gpsee_realm_t	*realm = gpsee_getRealm(cx);
 	JSObject	*globalObject = realm->globalObject;
 
-printf("%s:\tglobal object is at: %p\n", __FUNCTION__, realm->globalObject);
-
 	if (argc != 1) {
 		return JS_TRUE;
 	}
@@ -2945,7 +2943,8 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	  fprintf(stderr, " *** Fatal Error: could not read module's config file (%s)\n", strerror(errno));
 	  return;
 	}
-	snprintf(rpath, sizeof(rpath), "%s%s%s", s, (s[strlen(s) - 1] == '/' ? "" : "/"), "*.ape.js");
+#if 0 /* old-style init; load multiple .ape.js files */
+ 	snprintf(rpath, sizeof(rpath), "%s%s%s", s, (s[strlen(s) - 1] == '/' ? "" : "/"), "*.ape.js");
 	
 	glob(rpath, 0, NULL, &globbuf);
 	
@@ -2986,9 +2985,57 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 			asr->scripts = asc;
 	}
 	globfree(&globbuf);
+#else /* new-style init; load only main.ape.js, as the CommonJS main module */
+	snprintf(rpath, sizeof(rpath), "%s%smain.ape.js", s, (s[strlen(s) - 1] == '/' ? "" : "/"));
+	printf("Loading main module: %s\n", rpath);
+
+	ape_sm_compiled *asc = xmalloc(sizeof(*asc));
+	asc->filename = (void *)xstrdup(rpath);
+	asc->cx = gpsee_createContext(asr->jsi->realm);
+	asc->global = asr->jsi->realm->globalObject;
+
+	/* define the Ape Object */
+	ape_sm_define_ape(asc, asr->jsi->cx, g_ape);
+
+	/* put the Ape table on the script structure */
+	asc->g_ape = g_ape;
 	
+	asc->callbacks.head = NULL;
+	asc->callbacks.foot = NULL;
+
+	/* Run the script in GPSEE program context */
+	asc->scriptObj = NULL;
+	JS_AddNamedObjectRoot(asc->cx, &asc->scriptObj, asc->filename);
+
+	if (gpsee_runProgramModule(asc->cx, rpath, NULL, /* FILE */ NULL, /* argv */ NULL, /* environ */ NULL) == JS_TRUE)
+	{
+	  asr->jsi->grt->exitType = et_finished;
+	}
+	else
+	{
+	  int code;
+
+	  code = gpsee_getExceptionExitCode(asc->cx);	
+	  if (code >= 0)	/** e.g. throw 6 */
+	  {
+	    asr->jsi->grt->exitType = et_requested;
+	    asr->jsi->grt->exitCode = code;
+	  }
+	  else
+	  {
+	    if (JS_IsExceptionPending(asc->cx))
+	    {
+	      asr->jsi->grt->exitType = et_exception;
+	      gpsee_reportUncaughtException(asc->cx, JSVAL_NULL, isatty(STDERR_FILENO));
+	    }
+	  }
+	  extern int ape_server_is_running;
+	  ape_server_is_running = 0;
+	}
+	asc->next = asr->scripts;
+	asr->scripts = asc;
+#endif	
 	APE_JS_EVENT("init", 0, NULL);
-	
 }
 
 static void free_module(acetables *g_ape) // Called when module is unloaded
