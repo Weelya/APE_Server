@@ -2738,7 +2738,7 @@ static void ape_sm_define_ape(ape_sm_compiled *asc, JSContext *gcx, acetables *g
 	JS_DefineFunctions(asc->cx, sha1, sha1_funcs);
 	
 	custompipe = JS_InitClass(asc->cx, obj, NULL, &pipe_class, ape_sm_pipe_constructor, 0, NULL, NULL, NULL, NULL);
-	add_property(&g_ape->properties, "pipe_proto", pipe, EXTEND_POINTER, EXTEND_ISPRIVATE);
+	add_property(&g_ape->properties, "pipe_proto", custompipe, EXTEND_POINTER, EXTEND_ISPRIVATE);
 
 	sockserver = JS_InitClass(asc->cx, obj, NULL, &socketserver_class, ape_sm_sockserver_constructor, 2, NULL, NULL, NULL, NULL);
 	sockclient = JS_InitClass(asc->cx, obj, NULL, &socketclient_class, ape_sm_sockclient_constructor, 2, NULL, NULL, NULL, NULL);
@@ -2912,6 +2912,11 @@ static void ape_fire_callback(const char *name, uintN argc, jsval *argv, acetabl
 	
 }
 
+#if defined(__SURELYNX__)
+#include <surelynx.h>
+extern rc_list rc;
+#endif
+
 static void init_module(acetables *g_ape) // Called when module is loaded
 {
 	ape_sm_runtime *asr;
@@ -2921,11 +2926,36 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	glob_t globbuf;
 	const char *s;
 
+#if defined(__SURELYNX__)
+	(void)apr_initRuntime();
+	char *fake_argv[2] = { "aped", NULL };
+	rcFILE *rc_file = rc_openfile(1, fake_argv);
+	if (!rc_file)
+	{
+	  fprintf(stderr, " *** Could not open APE's RC file!\n");
+	  rc = NULL;
+	}
+	else
+	{
+	  rc = rc_readfile(rc_file);
+	  rc_close(rc_file);
+	}
+#endif
+
 	asr = xmalloc(sizeof(*asr));
 	asr->scripts = NULL;
 
 	/* Setup a global context to store shared object */
 	asr->jsi = gpsee_createInterpreter();
+	if (getenv("JS_GC_ZEAL"))
+	{
+#if !defined(JS_GC_ZEAL)
+	  fprintf(stderr, " * Warning: JS_GC_ZEAL env var specified, but not a debug SpiderMonkey");
+#else
+	  JS_SetGCZeal(asr->jsi->cx, atoi(getenv("JS_GC_ZEAL")));
+#endif
+	}
+
 #ifdef GPSEE_DEBUGGER
 	asr->jsdc = gpsee_initDebugger(asr->jsi->cx, asr->jsi->realm, GPSEE_DEBUGGER);
 #endif
@@ -2952,6 +2982,11 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	
 		asc->filename = (void *)xstrdup(globbuf.gl_pathv[i]);
                 asc->cx = gpsee_createContext(asr->jsi->realm);
+#if defined(JS_GC_ZEAL)
+		if (getenv("JS_GC_ZEAL"))
+		  JS_SetGCZeal(asc->cx, atoi(getenv("JS_GC_ZEAL")));
+#endif
+	}
 		if (asc->cx == NULL) {
 			free(asc->filename);
 			free(asc);
@@ -2991,6 +3026,10 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	ape_sm_compiled *asc = xmalloc(sizeof(*asc));
 	asc->filename = (void *)xstrdup(rpath);
 	asc->cx = gpsee_createContext(asr->jsi->realm);
+#if defined(JS_GC_ZEAL)
+	if (getenv("JS_GC_ZEAL"))
+	  JS_SetGCZeal(asc->cx, atoi(getenv("JS_GC_ZEAL")));
+#endif
 	asc->global = asr->jsi->realm->globalObject;
 
 	/* define the Ape Object */
