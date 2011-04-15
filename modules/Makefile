@@ -48,3 +48,8 @@ lib/libape-spidermonkey.so: libape-spidermonkey.o
 
 clean:
 	$(RM) $(MODULES) $(notdir $(MODULES:.so=.o))
+
+# XXX fixme
+install:
+	cp lib/libape-spidermonkey.so /opt/PMItic/ape/modules/libexec/libape-spidermonkey.so
+
