@@ -11,7 +11,3 @@ Ape.addEvent("init", function() {
 	//include("examples/ircserver.js");
 	//include("framework/http_auth.js");
 });
-
-// Ape.registerCmd("foo", false, function(params, cmd) { return [800, "bar"]  });
-// http://192.168.2.110:6969/?[{"cmd":"foo"}]
-// [{"time":"1297979089","raw":"ERR","data":{"code":"800","value":"bar"}}]

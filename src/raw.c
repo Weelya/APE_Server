@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2006, 2007, 2008, 2009, 2010  Anthony Catel <a.catel@weelya.com>
+  Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011  Anthony Catel <a.catel@weelya.com>
 
   This file is part of APE Server.
   APE is free software; you can redistribute it and/or modify
@@ -47,7 +47,7 @@ RAW *forge_raw(const char *raw, json_item *jlist)
 	string = json_to_string(jstruct, NULL, 1);
 
 	new_raw = xmalloc(sizeof(*new_raw));
-    	new_raw->len = string->len;
+	new_raw->len = string->len;
 	new_raw->next = NULL;
 	new_raw->priority = RAW_PRI_LO;
 	new_raw->refcount = 0;
@@ -79,9 +79,9 @@ RAW *copy_raw(RAW *input)
 	new_raw->next = input->next;
 	new_raw->priority = input->priority;
 	new_raw->refcount = 0;
-    	new_raw->data = xmalloc(sizeof(char) * (new_raw->len + 1));
+	new_raw->data = xmalloc(sizeof(char) * (new_raw->len + 1));
 
-    	memcpy(new_raw->data, input->data, new_raw->len + 1);	
+	memcpy(new_raw->data, input->data, new_raw->len + 1);	
 
 	return new_raw;	
 }
@@ -269,9 +269,9 @@ int send_raw_inline(ape_socket *client, transport_t transport, RAW *raw, acetabl
 {
 	struct _transport_properties *properties;
 	int finish = 1;
-	
+
 	properties = transport_get_properties(transport, g_ape);
-	
+
 	switch(transport) {
 		case TRANSPORT_XHRSTREAMING:
 			finish &= http_send_headers(NULL, HEADER_XHR, HEADER_XHR_LEN, client, g_ape);
@@ -280,6 +280,7 @@ int send_raw_inline(ape_socket *client, transport_t transport, RAW *raw, acetabl
 			finish &= http_send_headers(NULL, HEADER_SSE, HEADER_SSE_LEN, client, g_ape);
 			break;
 		case TRANSPORT_WEBSOCKET:
+		case TRANSPORT_WEBSOCKET_IETF:
 			break;
 		default:
 			finish &= http_send_headers(NULL, HEADER_DEFAULT, HEADER_DEFAULT_LEN, client, g_ape);
@@ -289,6 +290,40 @@ int send_raw_inline(ape_socket *client, transport_t transport, RAW *raw, acetabl
 	if (properties != NULL && properties->padding.left.val != NULL) {
 		finish &= sendbin(client->fd, properties->padding.left.val, properties->padding.left.len, 0, g_ape);
 	}	
+
+
+	if (transport == TRANSPORT_WEBSOCKET_IETF) {
+	    websocket_state *websocket = client->parser.data;
+	    char payload_head[32] = { websocket->version == WS_IETF_06 ? 0x84 : 0x81 };
+	    int payload_size = raw->len+2; /* TODO: fragmentation? */
+	    int payload_length = 0;
+	    
+	    if (payload_size <= 125) {
+	        payload_head[1] = (unsigned char)payload_size & 0x7F;
+	        payload_length = 2;
+	    } else if (payload_size <= 65535) {
+	        unsigned short int s = htons(payload_size);
+	        payload_head[1] = 126;
+	        
+	        memcpy(&payload_head[2], &s, 2);
+	        
+	        payload_length = 4;
+	    } else if (payload_size <= 0xFFFFFFFF) {
+	        unsigned int s = htonl(payload_size);
+	        
+	        payload_head[1] = 127;
+	        payload_head[2] = 0;
+	        payload_head[3] = 0;
+	        payload_head[4] = 0;
+	        payload_head[5] = 0;
+	        
+            memcpy(&payload_head[6], &s, 4);
+
+	        payload_length = 10;
+	    }
+        
+        finish &= sendbin(client->fd, payload_head, payload_length, 0, g_ape);        
+	}
 	
 	finish &= sendbin(client->fd, "[", 1, 0, g_ape);
 	
@@ -306,6 +341,42 @@ int send_raw_inline(ape_socket *client, transport_t transport, RAW *raw, acetabl
 }
 
 /*
+    pre compute the payload size
+    TODO: Do that while adding raws to list
+*/
+static unsigned int raws_size(subuser *user)
+{
+    struct _raw_pool *pool;
+    int state = 0;
+    unsigned int size = 1; /* 1 for the first |[| */
+    
+	if (user->raw_pools.nraw == 0) {
+		return 0;
+	}
+	
+	if (user->raw_pools.high.nraw) {
+		pool = user->raw_pools.high.rawfoot->prev;
+	} else {
+		pool = user->raw_pools.low.rawhead;
+		state = 1;
+	}    
+	while (pool->raw != NULL) {
+		struct _raw_pool *pool_next = (state ? pool->next : pool->prev);
+		
+		size +=  pool->raw->len + 1; /* 1 for trailing |,| or |]| */
+
+		pool = pool_next;
+		
+		if ((pool == NULL || pool->raw == NULL) && !state) {
+			pool = user->raw_pools.low.rawhead;
+			state = 1;
+		}
+	}
+    
+    return size;
+}
+
+/*
 	Send queue to socket
 */
 int send_raws(subuser *user, acetables *g_ape)
@@ -313,11 +384,11 @@ int send_raws(subuser *user, acetables *g_ape)
 	int finish = 1, state = 0;
 	struct _raw_pool *pool;
 	struct _transport_properties *properties;
-	
+
 	if (user->raw_pools.nraw == 0) {
 		return 1;
 	}
-	
+
 	PACK_TCP(user->client->fd); /* Activate TCP_CORK */
 	
 	properties = transport_get_properties(user->user->transport, g_ape);
@@ -333,6 +404,7 @@ int send_raws(subuser *user, acetables *g_ape)
 				finish &= http_send_headers(user->headers.content, HEADER_SSE, HEADER_SSE_LEN, user->client, g_ape);
 				break;
 			case TRANSPORT_WEBSOCKET:
+			case TRANSPORT_WEBSOCKET_IETF:
 				break;
 			default:
 				finish &= http_send_headers(user->headers.content, HEADER_DEFAULT, HEADER_DEFAULT_LEN, user->client, g_ape);
@@ -344,9 +416,7 @@ int send_raws(subuser *user, acetables *g_ape)
 	if (properties != NULL && properties->padding.left.val != NULL) {
 		finish &= sendbin(user->client->fd, properties->padding.left.val, properties->padding.left.len, 0, g_ape);
 	}
-	
-	finish &= sendbin(user->client->fd, "[", 1, 0, g_ape);
-	
+
 	if (user->raw_pools.high.nraw) {
 		pool = user->raw_pools.high.rawfoot->prev;
 	} else {
@@ -354,11 +424,47 @@ int send_raws(subuser *user, acetables *g_ape)
 		state = 1;
 	}
 	
+	if (user->user->transport == TRANSPORT_WEBSOCKET_IETF) {
+	    websocket_state *websocket = user->client->parser.data;
+	    char payload_head[32] = { websocket->version == WS_IETF_06 ? 0x84 : 0x81 };
+
+	    int payload_size = raws_size(user); /* TODO: fragmentation? */
+	    int payload_length = 0;
+	    
+	    if (payload_size <= 125) {
+	        payload_head[1] = (unsigned char)payload_size & 0x7F;
+	        payload_length = 2;
+	    } else if (payload_size <= 65535) {
+	        unsigned short int s = htons(payload_size);
+	        payload_head[1] = 126;
+	        
+	        memcpy(&payload_head[2], &s, 2);
+	        
+	        payload_length = 4;
+	    } else if (payload_size <= 0xFFFFFFFF) {
+	        unsigned int s = htonl(payload_size);
+	        
+	        payload_head[1] = 127;
+	        payload_head[2] = 0;
+	        payload_head[3] = 0;
+	        payload_head[4] = 0;
+	        payload_head[5] = 0;
+	        
+            memcpy(&payload_head[6], &s, 4);
+
+	        payload_length = 10;
+	    }
+        
+        finish &= sendbin(user->client->fd, payload_head, payload_length, 0, g_ape);
+
+	}
+	finish &= sendbin(user->client->fd, "[", 1, 0, g_ape);
+		
 	while (pool->raw != NULL) {
 		struct _raw_pool *pool_next = (state ? pool->next : pool->prev);
-		
+
 		finish &= sendbin(user->client->fd, pool->raw->data, pool->raw->len, 0, g_ape);
-		
+
 		if ((pool_next != NULL && pool_next->raw != NULL) || (!state && user->raw_pools.low.nraw)) {
 			finish &= sendbin(user->client->fd, ",", 1, 0, g_ape);
 		} else {
