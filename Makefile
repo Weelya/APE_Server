@@ -25,7 +25,6 @@ RM		= rm -f
 
 all: $(LIBRARY) $(EXEC)
 
-<<<<<<< HEAD
 $(EXEC): LOADLIBES += -laped
 $(EXEC): $(APED_SRC:.c=.o)
 	@[ -d $(dir $@) ] || mkdir -p $(dir $@) || echo "*** error: could not mkdir $(dir $@)"
@@ -36,12 +35,6 @@ $(LIBRARY): $(LIBAPED_SRC:.c=.o) ./deps/udns-0.0.9/libudns.a
 	$(LD) $^ -o $@
 
 $(LIBAPED_SRC:.c=.o):	EXTRA_CFLAGS += -fPIC
-=======
-CFLAGS = -Wall -g -minline-all-stringops -rdynamic -I ./deps/udns-0.0.9/
-LFLAGS=-ldl -lm -lpthread
-CC=gcc -D_GNU_SOURCE
-RM=rm -f
->>>>>>> official/master
 
 install: 
 	install -d $(bindir)
